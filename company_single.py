@@ -8,7 +8,7 @@ app = Flask(__name__)
 # =============================
 DEEPSEEK_API_KEY = "sk-60389d1e6ba446d7920dd011947db7f5"
 BLOGGER_API_KEY = "AIzaSyBFUbx6q98fZhUQZTntDh7YnufDnMa8p18"
-BLOGGER_TOKEN = "ya29.a0AQvPyIP74eNJBwazWRCC378sQQghN6o1qWUAdYGcuRpr4f5m7O08JGgshnrxyaGNE3wLW7g1ch7-v9i0YBAp1WayB6TTnCN2gwW7oqJtSQdtQExtgqnim"
+BLOGGER_TOKEN = "1//04C38KA3es1L0CgYIARAAGAQSNwF-L9IrStQ6-x32VZKNygcARB21SStvzNhYTgXVtSWPfL1hqCPqsnlemqflagmL3fy1wKAMAQU"
 BLOG_ID = "21948522432663252"
 # =============================
 
