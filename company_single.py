@@ -19,7 +19,7 @@ def log(agent, message, status="working"):
     company_state["logs"].append({"agent": agent, "message": message, "status": status})
 
 def get_fresh_blogger_token():
-    """Refresh token se har baar naya access token lega — kabhi expire nahi hoga!"""
+    """Refresh token se har baar naya access token lega"""
     resp = requests.post("https://oauth2.googleapis.com/token", data={
         "client_id":     CLIENT_ID,
         "client_secret": CLIENT_SECRET,
@@ -34,8 +34,21 @@ def get_fresh_blogger_token():
 def call_deepseek(system_prompt, user_message, max_tokens=2000):
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
     body = {"model": "deepseek-chat", "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}], "max_tokens": max_tokens, "temperature": 0.7}
-    resp = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=body, timeout=60)
-    return resp.json()["choices"][0]["message"]["content"]
+    
+    try:
+        resp = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=body, timeout=60)
+        
+        if resp.status_code != 200:
+            raise Exception(f"API Error {resp.status_code}: {resp.text}")
+            
+        data = resp.json()
+        if "choices" in data and len(data["choices"]) > 0:
+            return data["choices"][0]["message"]["content"]
+        else:
+            raise Exception(f"Unexpected API response: {data}")
+            
+    except Exception as e:
+        raise Exception(f"Connection ya parsing error: {str(e)}")
 
 def ceo_agent():
     return call_deepseek("You are Aria, CEO of Neo Vision Hub. Communicate in Roman Urdu. Create daily task plan.", "Aaj ke liye team ko kya plan dena chahiye? 3 points mein Roman Urdu mein batao.", 500)
@@ -49,7 +62,7 @@ def content_writer_agent(trend):
         clean = result.strip().replace("```json","").replace("```","").strip()
         return json.loads(clean)
     except:
-        return {"title": "Latest Tech Trends 2025", "content": f"<p>{result}</p>", "excerpt": result[:200]}
+        return {"title": "Latest Tech Trends", "content": f"<p>{result}</p>", "excerpt": result[:200]}
 
 def seo_expert_agent(title, content):
     result = call_deepseek("You are an SEO Expert. Return ONLY valid JSON with: meta_title, meta_description, keywords (list of 5), tags (list of 5).", f"Optimize SEO for:\nTitle: {title}\nContent: {content[:300]}\n\nReturn ONLY valid JSON.", 500)
@@ -57,7 +70,7 @@ def seo_expert_agent(title, content):
         clean = result.strip().replace("```json","").replace("```","").strip()
         return json.loads(clean)
     except:
-        return {"meta_title": title, "meta_description": content[:160], "keywords": ["technology","AI","news","2025","trending"], "tags": ["AI","Tech","News","Trending","2025"]}
+        return {"meta_title": title, "meta_description": content[:160], "keywords": ["technology","AI","news","trending"], "tags": ["AI","Tech","News","Trending"]}
 
 def image_agent(title):
     prompt = f"professional blog header image for article about {title}, modern clean digital art"
@@ -83,7 +96,6 @@ def marketing_agent(title):
     return call_deepseek("You are a Marketing Agent for Neo Vision Hub. Give practical marketing tips in Roman Urdu.", f"Is blog post ko promote karne ke liye 3 strategies batao (Roman Urdu mein): {title}", 400)
 
 def publish_to_blogger(post, image_url):
-    # Har baar fresh token lega automatically
     try:
         fresh_token = get_fresh_blogger_token()
     except Exception as e:
@@ -93,11 +105,15 @@ def publish_to_blogger(post, image_url):
     url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOG_ID}/posts/"
     headers = {"Authorization": f"Bearer {fresh_token}", "Content-Type": "application/json"}
     body = {"kind": "blogger#post", "title": post.get("title",""), "content": content_with_image, "labels": post.get("tags",[])}
-    resp = requests.post(url, headers=headers, json=body, timeout=30)
-    if resp.status_code == 200:
-        data = resp.json()
-        return {"status": "published", "url": data.get("url",""), "title": data.get("title","")}
-    return {"status": "error", "message": resp.text}
+    
+    try:
+        resp = requests.post(url, headers=headers, json=body, timeout=30)
+        if resp.status_code == 200:
+            data = resp.json()
+            return {"status": "published", "url": data.get("url",""), "title": data.get("title","")}
+        return {"status": "error", "message": f"Blogger Error: {resp.text}"}
+    except Exception as e:
+        return {"status": "error", "message": f"Publishing request failed: {str(e)}"}
 
 def run_company():
     company_state["running"] = True
@@ -264,28 +280,4 @@ function showResults(r){
     <div class="caption-box"><div class="clabel">Twitter</div>${r.captions.twitter||""}</div>
     <div class="caption-box"><div class="clabel">LinkedIn</div>${r.captions.linkedin||""}</div>`);
   if(r.marketing)html+=rc("📢 Marketing",`<div style="white-space:pre-wrap">${r.marketing}</div>`);
-  if(r.published){const p=r.published,cls=p.status==="published"?"published":p.status==="error"?"error":"skipped",msg=p.status==="published"?`✅ Published! <a href="${p.url}" target="_blank" style="color:#86efac">${p.url}</a>`:`⚠️ ${p.message}`;html+=rc("🚀 Publish",`<div class="pub ${cls}">${msg}</div>`);}
-  document.getElementById("results").innerHTML=html;
-}
-</script></body></html>'''
-
-@app.route("/")
-def dashboard():
-    return render_template_string(DASHBOARD)
-
-@app.route("/run", methods=["POST"])
-def run():
-    if company_state["running"]:
-        return jsonify({"error": "Team pehle se kaam kar rahi hai!"}), 400
-    t = threading.Thread(target=run_company)
-    t.daemon = True
-    t.start()
-    return jsonify({"message": "Chalu ho gaya!"})
-
-@app.route("/status")
-def get_status():
-    return jsonify(company_state)
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+  if(r.published){const p=r.published,cls=p.status==="published"?"published":p.status==="error"?"error":"skippe
