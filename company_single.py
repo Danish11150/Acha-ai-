@@ -1,5 +1,5 @@
 import os, json, requests, threading, urllib.parse
-from flask import Flask, jsonify, request
+from flask import Flask, render_template_string, jsonify, request
 
 app = Flask(__name__)
 
@@ -13,8 +13,148 @@ REFRESH_TOKEN    = "aapka_refresh_token"           # OAuth Playground se lo (per
 BLOG_ID          = "21948522432663252"
 # =============================
 
-# HTML Code ko separate variable mein rakha hai
-HTML_CODE = """<!DOCTYPE html>
+company_state = {"running": False, "logs": [], "results": {}, "status": "standby"}
+
+def log(agent, message, status="working"):
+    company_state["logs"].append({"agent": agent, "message": message, "status": status})
+
+def get_fresh_blogger_token():
+    """Refresh token se har baar naya access token lega — kabhi expire nahi hoga!"""
+    resp = requests.post("https://oauth2.googleapis.com/token", data={
+        "client_id":     CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "refresh_token": REFRESH_TOKEN,
+        "grant_type":    "refresh_token"
+    }, timeout=15)
+    result = resp.json()
+    if "access_token" in result:
+        return result["access_token"]
+    raise Exception(f"Token refresh failed: {result}")
+
+def call_deepseek(system_prompt, user_message, max_tokens=2000):
+    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+    body = {"model": "deepseek-chat", "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}], "max_tokens": max_tokens, "temperature": 0.7}
+    resp = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=body, timeout=60)
+    return resp.json()["choices"][0]["message"]["content"]
+
+def ceo_agent():
+    return call_deepseek("You are Aria, CEO of Neo Vision Hub. Communicate in Roman Urdu. Create daily task plan.", "Aaj ke liye team ko kya plan dena chahiye? 3 points mein Roman Urdu mein batao.", 500)
+
+def trend_hunter_agent():
+    return call_deepseek("You are a Trend Hunter for Neo Vision Hub blog. Find trending topics in AI, Technology, Trading, or Gaming. Return ONE trending topic in English.", "Find the most trending topic right now in AI, Tech, Trading or Gaming.", 300)
+
+def content_writer_agent(trend):
+    result = call_deepseek("You are a blog Content Writer for Neo Vision Hub. Write SEO-optimized posts in English. Return ONLY valid JSON with keys: title, content (HTML 600-800 words), excerpt.", f"Write a complete blog post about: {trend}\n\nReturn ONLY valid JSON.", 2000)
+    try:
+        clean = result.strip().replace("```json","").replace("```","").strip()
+        return json.loads(clean)
+    except:
+        return {"title": "Latest Tech Trends 2025", "content": f"<p>{result}</p>", "excerpt": result[:200]}
+
+def seo_expert_agent(title, content):
+    result = call_deepseek("You are an SEO Expert. Return ONLY valid JSON with: meta_title, meta_description, keywords (list of 5), tags (list of 5).", f"Optimize SEO for:\nTitle: {title}\nContent: {content[:300]}\n\nReturn ONLY valid JSON.", 500)
+    try:
+        clean = result.strip().replace("```json","").replace("```","").strip()
+        return json.loads(clean)
+    except:
+        return {"meta_title": title, "meta_description": content[:160], "keywords": ["technology","AI","news","2025","trending"], "tags": ["AI","Tech","News","Trending","2025"]}
+
+def image_agent(title):
+    prompt = f"professional blog header image for article about {title}, modern clean digital art"
+    encoded = urllib.parse.quote(prompt)
+    return f"https://image.pollinations.ai/prompt/{encoded}?width=1200&height=630&nologo=true"
+
+def editor_agent(post, seo, image_url):
+    post["image_url"] = image_url
+    post["meta_title"] = seo.get("meta_title", post["title"])
+    post["meta_description"] = seo.get("meta_description", post.get("excerpt",""))
+    post["tags"] = seo.get("tags", [])
+    return post
+
+def social_media_agent(title, content):
+    result = call_deepseek("You are a Social Media Manager. Return ONLY valid JSON with: instagram, twitter, linkedin captions in English.", f"Create social media captions for: {title}\n\nReturn ONLY valid JSON.", 600)
+    try:
+        clean = result.strip().replace("```json","").replace("```","").strip()
+        return json.loads(clean)
+    except:
+        return {"instagram": f"New post! {title} - Link in bio! #AI #Tech #NeoVisionHub", "twitter": f"Just published: {title} #AI #Tech", "linkedin": f"New article: {title}"}
+
+def marketing_agent(title):
+    return call_deepseek("You are a Marketing Agent for Neo Vision Hub. Give practical marketing tips in Roman Urdu.", f"Is blog post ko promote karne ke liye 3 strategies batao (Roman Urdu mein): {title}", 400)
+
+def publish_to_blogger(post, image_url):
+    try:
+        fresh_token = get_fresh_blogger_token()
+    except Exception as e:
+        return {"status": "error", "message": f"Token refresh failed: {str(e)}"}
+
+    content_with_image = f'<img src="{image_url}" alt="{post.get("title","")}" style="width:100%;border-radius:8px;margin-bottom:20px;"/>\n\n{post.get("content","")}'
+    url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOG_ID}/posts/"
+    headers = {"Authorization": f"Bearer {fresh_token}", "Content-Type": "application/json"}
+    body = {"kind": "blogger#post", "title": post.get("title",""), "content": content_with_image, "labels": post.get("tags",[])}
+    resp = requests.post(url, headers=headers, json=body, timeout=30)
+    if resp.status_code == 200:
+        data = resp.json()
+        return {"status": "published", "url": data.get("url",""), "title": data.get("title","")}
+    return {"status": "error", "message": resp.text}
+
+def run_company():
+    company_state["running"] = True
+    company_state["logs"] = []
+    company_state["results"] = {}
+    company_state["status"] = "running"
+    try:
+        log("CEO", "Aaj ke tasks assign kar raha hoon...")
+        company_state["results"]["ceo"] = ceo_agent()
+        log("CEO", "Plan ready!", "done")
+
+        log("Trend Hunter", "Trending topics dhundh raha hoon...")
+        trend = trend_hunter_agent()
+        company_state["results"]["trend"] = trend
+        log("Trend Hunter", "Topic mila!", "done")
+
+        log("Content Writer", "Blog post likh raha hoon...")
+        post = content_writer_agent(trend)
+        company_state["results"]["post"] = post
+        log("Content Writer", "Blog post ready!", "done")
+
+        log("SEO Expert", "SEO optimize kar raha hoon...")
+        seo = seo_expert_agent(post["title"], post["content"])
+        company_state["results"]["seo"] = seo
+        log("SEO Expert", "SEO complete!", "done")
+
+        log("Image Agent", "Image bana raha hoon...")
+        image_url = image_agent(post["title"])
+        company_state["results"]["image"] = image_url
+        log("Image Agent", "Image ready!", "done")
+
+        log("Editor", "Post review kar raha hoon...")
+        final_post = editor_agent(post, seo, image_url)
+        company_state["results"]["final_post"] = final_post
+        log("Editor", "Post approved!", "done")
+
+        log("Social Media", "Captions bana raha hoon...")
+        captions = social_media_agent(post["title"], post["content"])
+        company_state["results"]["captions"] = captions
+        log("Social Media", "Captions ready!", "done")
+
+        log("Marketing", "Strategy bana raha hoon...")
+        marketing = marketing_agent(post["title"])
+        company_state["results"]["marketing"] = marketing
+        log("Marketing", "Strategy ready!", "done")
+
+        log("CEO", "Blogger pr publish kar raha hoon...")
+        pub = publish_to_blogger(final_post, image_url)
+        company_state["results"]["published"] = pub
+        log("CEO", "Kaam mukammal!", "done")
+
+        company_state["status"] = "completed"
+    except Exception as e:
+        log("System", f"Error: {str(e)}", "error")
+        company_state["status"] = "error"
+    company_state["running"] = False
+
+DASHBOARD = '''<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Company — Neo Vision Hub</title>
 <style>
@@ -126,153 +266,14 @@ function showResults(r){
   if(r.published){const p=r.published,cls=p.status==="published"?"published":p.status==="error"?"error":"skipped",msg=p.status==="published"?`✅ Published! <a href="${p.url}" target="_blank" style="color:#86efac">${p.url}</a>`:`⚠️ ${p.message}`;html+=rc("🚀 Publish",`<div class="pub ${cls}">${msg}</div>`);}
   document.getElementById("results").innerHTML=html;
 }
-</script></body></html>"""
+</script></body></html>'''
 
-# HTML file automatically generate hogi
-if not os.path.exists("index.html"):
-    with open("index.html", "w", encoding="utf-8") as f:
-        f.write(HTML_CODE)
+@app.route("/")
+def dashboard():
+    return render_template_string(DASHBOARD)
 
-company_state = {"running": False, "logs": [], "results": {}, "status": "standby"}
-
-def log(agent, message, status="working"):
-    company_state["logs"].append({"agent": agent, "message": message, "status": status})
-
-def get_fresh_blogger_token():
-    """Refresh token se har baar naya access token lega — kabhi expire nahi hoga!"""
-    resp = requests.post("https://oauth2.googleapis.com/token", data={
-        "client_id":     CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "refresh_token": REFRESH_TOKEN,
-        "grant_type":    "refresh_token"
-    }, timeout=15)
-    result = resp.json()
-    if "access_token" in result:
-        return result["access_token"]
-    raise Exception(f"Token refresh failed: {result}")
-
-def call_deepseek(system_prompt, user_message, max_tokens=2000):
-    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-    body = {"model": "deepseek-chat", "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}], "max_tokens": max_tokens, "temperature": 0.7}
-    
-    try:
-        resp = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=body, timeout=60)
-        if resp.status_code != 200:
-            raise Exception(f"API Error {resp.status_code}: {resp.text}")
-        data = resp.json()
-        if "choices" in data and len(data["choices"]) > 0:
-            return data["choices"][0]["message"]["content"]
-        else:
-            raise Exception(f"Unexpected API response: {data}")
-    except Exception as e:
-        raise Exception(f"Connection ya parsing error: {str(e)}")
-
-def ceo_agent():
-    return call_deepseek("You are Aria, CEO of Neo Vision Hub. Communicate in Roman Urdu. Create daily task plan.", "Aaj ke liye team ko kya plan dena chahiye? 3 points mein Roman Urdu mein batao.", 500)
-
-def trend_hunter_agent():
-    return call_deepseek("You are a Trend Hunter for Neo Vision Hub blog. Find trending topics in AI, Technology, Trading, or Gaming. Return ONE trending topic in English.", "Find the most trending topic right now in AI, Tech, Trading or Gaming.", 300)
-
-def content_writer_agent(trend):
-    result = call_deepseek("You are a blog Content Writer for Neo Vision Hub. Write SEO-optimized posts in English. Return ONLY valid JSON with keys: title, content (HTML 600-800 words), excerpt.", f"Write a complete blog post about: {trend}\n\nReturn ONLY valid JSON.", 2000)
-    try:
-        clean = result.strip().replace("```json","").replace("```","").strip()
-        return json.loads(clean)
-    except:
-        return {"title": "Latest Tech Trends 2025", "content": f"<p>{result}</p>", "excerpt": result[:200]}
-
-def seo_expert_agent(title, content):
-    result = call_deepseek("You are an SEO Expert. Return ONLY valid JSON with: meta_title, meta_description, keywords (list of 5), tags (list of 5).", f"Optimize SEO for:\nTitle: {title}\nContent: {content[:300]}\n\nReturn ONLY valid JSON.", 500)
-    try:
-        clean = result.strip().replace("```json","").replace("```","").strip()
-        return json.loads(clean)
-    except:
-        return {"meta_title": title, "meta_description": content[:160], "keywords": ["technology","AI","news","2025","trending"], "tags": ["AI","Tech","News","Trending","2025"]}
-
-def image_agent(title):
-    prompt = f"professional blog header image for article about {title}, modern clean digital art"
-    encoded = urllib.parse.quote(prompt)
-    return f"https://image.pollinations.ai/prompt/{encoded}?width=1200&height=630&nologo=true"
-
-def editor_agent(post, seo, image_url):
-    post["image_url"] = image_url
-    post["meta_title"] = seo.get("meta_title", post["title"])
-    post["meta_description"] = seo.get("meta_description", post.get("excerpt",""))
-    post["tags"] = seo.get("tags", [])
-    return post
-
-def social_media_agent(title, content):
-    result = call_deepseek("You are a Social Media Manager. Return ONLY valid JSON with: instagram, twitter, linkedin captions in English.", f"Create social media captions for: {title}\n\nReturn ONLY valid JSON.", 600)
-    try:
-        clean = result.strip().replace("```json","").replace("```","").strip()
-        return json.loads(clean)
-    except:
-        return {"instagram": f"New post! {title} - Link in bio! #AI #Tech #NeoVisionHub", "twitter": f"Just published: {title} #AI #Tech", "linkedin": f"New article: {title}"}
-
-def marketing_agent(title):
-    return call_deepseek("You are a Marketing Agent for Neo Vision Hub. Give practical marketing tips in Roman Urdu.", f"Is blog post ko promote karne ke liye 3 strategies batao (Roman Urdu mein): {title}", 400)
-
-def publish_to_blogger(post, image_url):
-    try:
-        fresh_token = get_fresh_blogger_token()
-    except Exception as e:
-        return {"status": "error", "message": f"Token refresh failed: {str(e)}"}
-
-    content_with_image = f'<img src="{image_url}" alt="{post.get("title","")}" style="width:100%;border-radius:8px;margin-bottom:20px;"/>\n\n{post.get("content","")}'
-    url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOG_ID}/posts/"
-    headers = {"Authorization": f"Bearer {fresh_token}", "Content-Type": "application/json"}
-    body = {"kind": "blogger#post", "title": post.get("title",""), "content": content_with_image, "labels": post.get("tags",[])}
-    resp = requests.post(url, headers=headers, json=body, timeout=30)
-    
-    if resp.status_code == 200:
-        data = resp.json()
-        return {"status": "published", "url": data.get("url",""), "title": data.get("title","")}
-    return {"status": "error", "message": resp.text}
-
-def run_company():
-    company_state["running"] = True
-    company_state["logs"] = []
-    company_state["results"] = {}
-    company_state["status"] = "running"
-    try:
-        log("CEO", "Aaj ke tasks assign kar raha hoon...")
-        company_state["results"]["ceo"] = ceo_agent()
-        log("CEO", "Plan ready!", "done")
-
-        log("Trend Hunter", "Trending topics dhundh raha hoon...")
-        trend = trend_hunter_agent()
-        company_state["results"]["trend"] = trend
-        log("Trend Hunter", "Topic mila!", "done")
-
-        log("Content Writer", "Blog post likh raha hoon...")
-        post = content_writer_agent(trend)
-        company_state["results"]["post"] = post
-        log("Content Writer", "Blog post ready!", "done")
-
-        log("SEO Expert", "SEO optimize kar raha hoon...")
-        seo = seo_expert_agent(post["title"], post["content"])
-        company_state["results"]["seo"] = seo
-        log("SEO Expert", "SEO complete!", "done")
-
-        log("Image Agent", "Image bana raha hoon...")
-        image_url = image_agent(post["title"])
-        company_state["results"]["image"] = image_url
-        log("Image Agent", "Image ready!", "done")
-
-        log("Editor", "Post review kar raha hoon...")
-        final_post = editor_agent(post, seo, image_url)
-        company_state["results"]["final_post"] = final_post
-        log("Editor", "Post approved!", "done")
-
-        log("Social Media", "Captions bana raha hoon...")
-        captions = social_media_agent(post["title"], post["content"])
-        company_state["results"]["captions"] = captions
-        log("Social Media", "Captions ready!", "done")
-
-        log("Marketing", "Strategy bana raha hoon...")
-        marketing = marketing_agent(post["title"])
-        company_state["results"]["marketing"] = marketing
-        log("Marketing", "Strategy ready!", "done")
-
-        log("CEO", "Blogger pr publish kar raha hoon...")
-        pub = publish_to_blogger(final_post,
+@app.route("/run", methods=["POST"])
+def run():
+    if company_state["running"]:
+        return jsonify({"error": "Team pehle se kaam kar rahi hai!"}), 400
+    t = threading.Thread(tar
