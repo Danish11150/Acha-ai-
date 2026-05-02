@@ -6,10 +6,10 @@ app = Flask(__name__)
 # =============================
 # APNI KEYS YAHAN DAALO
 # =============================
-DEEPSEEK_API_KEY = "sk-60389d1e6ba446d7920dd011947db7f5"
-BLOGGER_API_KEY = "AIzaSyCVaFC5YJcqbRkvYJIJrz_PZf_YhxdgoLQ"
-BLOGGER_TOKEN = "1//04C38KA3es1L0CgYIARAAGAQSNwF-L9IrStQ6-x32VZKNygcARB21SStvzNhYTgXVtSWPfL1hqCPqsnlemqflagmL3fy1wKAMAQU"
-BLOG_ID = "21948522432663252"
+DEEPSEEK_API_KEY = os.getenv ("apki_deepseek_key")
+BLOGGER_API_KEY = os.getenv ("apki_blogger_api_key")
+BLOGGER_TOKEN = os.getenv ("apka_access_token")
+BLOG_ID = os.getenv ("apka_blog_id")
 # =============================
 
 company_state = {"running": False, "logs": [], "results": {}, "status": "standby"}
@@ -271,3 +271,4 @@ def get_status():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+    
