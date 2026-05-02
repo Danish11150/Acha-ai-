@@ -6,10 +6,12 @@ app = Flask(__name__)
 # =============================
 # APNI KEYS YAHAN DAALO
 # =============================
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_API_KEY = "apki_deepseek_key"
 BLOGGER_API_KEY = os.environ.get("BLOGGER_API_KEY", "")
-BLOGGER_TOKEN = os.environ.get("BLOGGER_ACCESS_TOKEN", "")
-BLOG_ID = os.environ.get("BLOG_ID", "")
+BLOGGER_REFRESH_TOKEN = os.environ.get("BLOGGER_REFRESH_TOKEN", "")
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+BLOG_ID = "apka_blog_id"
 # =============================
 
 company_state = {"running": False, "logs": [], "results": {}, "status": "standby"}
@@ -68,18 +70,33 @@ def social_media_agent(title, content):
 def marketing_agent(title):
     return call_deepseek("You are a Marketing Agent for Neo Vision Hub. Give practical marketing tips in Roman Urdu.", f"Is blog post ko promote karne ke liye 3 strategies batao (Roman Urdu mein): {title}", 400)
 
+def get_fresh_token():
+    resp = requests.post("https://oauth2.googleapis.com/token", data={
+        "refresh_token": BLOGGER_REFRESH_TOKEN,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "grant_type": "refresh_token"
+    })
+    return resp.json().get("access_token", "")
+
 def publish_to_blogger(post, image_url):
-    if not BLOGGER_TOKEN or not BLOG_ID or BLOGGER_TOKEN == "apka_access_token":
-        return {"status": "skipped", "message": "Blogger credentials nahi hain. Manually copy karo!"}
-    content_with_image = f'<img src="{image_url}" alt="{post.get("title","")}" style="width:100%;border-radius:8px;margin-bottom:20px;"/>\n\n{post.get("content","")}'
-    url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOG_ID}/posts/"
-    headers = {"Authorization": f"Bearer {BLOGGER_TOKEN}", "Content-Type": "application/json"}
-    body = {"kind": "blogger#post", "title": post.get("title",""), "content": content_with_image, "labels": post.get("tags",[])}
-    resp = requests.post(url, headers=headers, json=body, timeout=30)
-    if resp.status_code == 200:
-        data = resp.json()
-        return {"status": "published", "url": data.get("url",""), "title": data.get("title","")}
-    return {"status": "error", "message": resp.text}
+    if not BLOGGER_REFRESH_TOKEN or not BLOG_ID:
+        return {"status": "skipped", "message": "Blogger credentials nahi hain. Render mein add karo!"}
+    try:
+        token = get_fresh_token()
+        if not token:
+            return {"status": "error", "message": "Token refresh nahi hua!"}
+        content_with_image = f'<img src="{image_url}" alt="{post.get("title","")}" style="width:100%;border-radius:8px;margin-bottom:20px;"/>\n\n{post.get("content","")}'
+        url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOG_ID}/posts/"
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        body = {"kind": "blogger#post", "title": post.get("title",""), "content": content_with_image, "labels": post.get("tags",[])}
+        resp = requests.post(url, headers=headers, json=body, timeout=30)
+        if resp.status_code == 200:
+            data = resp.json()
+            return {"status": "published", "url": data.get("url",""), "title": data.get("title","")}
+        return {"status": "error", "message": resp.text}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 def run_company():
     company_state["running"] = True
@@ -259,16 +276,4 @@ def dashboard():
 def run():
     if company_state["running"]:
         return jsonify({"error": "Team pehle se kaam kar rahi hai!"}), 400
-    t = threading.Thread(target=run_company)
-    t.daemon = True
-    t.start()
-    return jsonify({"message": "Chalu ho gaya!"})
-
-@app.route("/status")
-def get_status():
-    return jsonify(company_state)
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
-    
+    t = thre
