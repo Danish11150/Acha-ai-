@@ -6,10 +6,10 @@ app = Flask(__name__)
 # =============================
 # APNI KEYS YAHAN DAALO
 # =============================
-DEEPSEEK_API_KEY = os.getenv ("apki_deepseek_key")
-BLOGGER_API_KEY = os.getenv ("apki_blogger_api_key")
-BLOGGER_TOKEN = os.getenv ("apka_access_token")
-BLOG_ID = os.getenv ("apka_blog_id")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY
+BLOGGER_API_KEY = os.environ.get("apki_blogger_api_key")
+BLOGGER_TOKEN = os.environ.get("apka_access_token")
+BLOG_ID = os.environ.get("apka_blog_id")
 # =============================
 
 company_state = {"running": False, "logs": [], "results": {}, "status": "standby"}
