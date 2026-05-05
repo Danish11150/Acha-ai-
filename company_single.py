@@ -23,9 +23,17 @@ def log(agent, message, status="working"):
 def call_deepseek(system_prompt, user_message, max_tokens=2000):
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
     body = {"model": "deepseek-chat", "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}], "max_tokens": max_tokens, "temperature": 0.7}
-    resp = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=body, timeout=60)
-    return resp.json()["choices"][0]["message"]["content"]
-
+    try:
+        resp = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=body, timeout=60)
+        data = resp.json()
+        # Agar error ho to raise karo
+        if "error" in data:
+            raise Exception(f"DeepSeek API error: {data['error']}")
+        return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        log("System", f"DeepSeek call failed: {str(e)}", "error")
+        return "Fallback: AI response unavailable."
+        
 def ceo_agent():
     return call_deepseek("You are Aria, CEO of Neo Vision Hub. Communicate in Roman Urdu. Create daily task plan.", "Aaj ke liye team ko kya plan dena chahiye? 3 points mein Roman Urdu mein batao.", 500)
 
