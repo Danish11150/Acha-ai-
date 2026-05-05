@@ -301,13 +301,6 @@ DASHBOARD = '''
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
         }
-        .log-line {
-            font-size: 12px;
-            color: #9CA3AF;
-            border-left: 2px solid #6366F1;
-            padding-left: 12px;
-            margin-bottom: 8px;
-        }
         .result-section {
             background: #0F1420;
             border-radius: 20px;
@@ -329,7 +322,6 @@ DASHBOARD = '''
 </head>
 <body>
     <div class="max-w-6xl mx-auto px-4 py-8">
-        <!-- Header -->
         <div class="flex justify-between items-center mb-8">
             <div>
                 <h1 class="text-3xl font-bold"><span class="gradient-text">Neo Vision Hub</span> 🤖</h1>
@@ -340,16 +332,11 @@ DASHBOARD = '''
                 <span class="status-dot ml-2" id="mainStatusDot"></span>
             </div>
         </div>
-
-        <!-- Run Button -->
         <div class="text-center my-8">
             <button id="runBtn" class="btn-primary text-lg px-10 py-3" onclick="startRun()">▶ Run AI Agents</button>
             <p class="text-gray-500 text-sm mt-3">Generates blog post, SEO, social media, and publishes to Blogger</p>
         </div>
-
-        <!-- Agents Grid -->
         <div class="grid md:grid-cols-2 gap-5 mb-10">
-            <!-- CEO -->
             <div class="agent-card p-5 col-span-full md:col-span-2" id="card-ceo">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
@@ -360,7 +347,6 @@ DASHBOARD = '''
                 </div>
                 <div class="mt-3 text-sm text-gray-400" id="log-ceo">Waiting...</div>
             </div>
-            <!-- Other agents -->
             <div class="agent-card p-4" id="card-trend"><div class="flex justify-between"><div><span class="text-xl">🔍</span> <span class="font-medium ml-2">Zain</span><div class="text-xs text-gray-400">Trend Hunter</div></div><span class="text-xs px-2 py-1 rounded-full bg-gray-800" id="chip-trend">Standby</span></div><div class="mt-2 text-sm text-gray-400" id="log-trend">-</div></div>
             <div class="agent-card p-4" id="card-writer"><div class="flex justify-between"><div><span class="text-xl">✍️</span> <span class="font-medium ml-2">Sara</span><div class="text-xs text-gray-400">Content Writer</div></div><span class="text-xs px-2 py-1 rounded-full bg-gray-800" id="chip-writer">Standby</span></div><div class="mt-2 text-sm text-gray-400" id="log-writer">-</div></div>
             <div class="agent-card p-4" id="card-seo"><div class="flex justify-between"><div><span class="text-xl">🎯</span> <span class="font-medium ml-2">Rayan</span><div class="text-xs text-gray-400">SEO Expert</div></div><span class="text-xs px-2 py-1 rounded-full bg-gray-800" id="chip-seo">Standby</span></div><div class="mt-2 text-sm text-gray-400" id="log-seo">-</div></div>
@@ -369,16 +355,12 @@ DASHBOARD = '''
             <div class="agent-card p-4" id="card-social"><div class="flex justify-between"><div><span class="text-xl">📱</span> <span class="font-medium ml-2">Mia</span><div class="text-xs text-gray-400">Social Media</div></div><span class="text-xs px-2 py-1 rounded-full bg-gray-800" id="chip-social">Standby</span></div><div class="mt-2 text-sm text-gray-400" id="log-social">-</div></div>
             <div class="agent-card p-4" id="card-marketing"><div class="flex justify-between"><div><span class="text-xl">📢</span> <span class="font-medium ml-2">Omar</span><div class="text-xs text-gray-400">Marketing</div></div><span class="text-xs px-2 py-1 rounded-full bg-gray-800" id="chip-marketing">Standby</span></div><div class="mt-2 text-sm text-gray-400" id="log-marketing">-</div></div>
         </div>
-
-        <!-- Results Area -->
         <div id="results" class="result-section hidden"></div>
     </div>
-
     <script>
         let pollInterval = null;
         let lastLogCount = 0;
         const agentMap = {"CEO":"ceo","Trend Hunter":"trend","Content Writer":"writer","SEO Expert":"seo","Image Agent":"image","Editor":"editor","Social Media":"social","Marketing":"marketing","System":"ceo"};
-
         function setStatus(agentId, status, text, logMsg) {
             const chip = document.getElementById(`chip-${agentId}`);
             const logEl = document.getElementById(`log-${agentId}`);
@@ -388,11 +370,7 @@ DASHBOARD = '''
             }
             if (logEl && logMsg) logEl.innerText = logMsg;
         }
-
-        function setWorking(agentId) {
-            setStatus(agentId, 'working', 'Working...', 'Processing...');
-        }
-
+        function setWorking(agentId) { setStatus(agentId, 'working', 'Working...', 'Processing...'); }
         async function startRun() {
             const btn = document.getElementById('runBtn');
             btn.disabled = true;
@@ -401,15 +379,11 @@ DASHBOARD = '''
             document.getElementById('mainStatusDot').className = 'status-dot status-working pulse';
             document.getElementById('results').innerHTML = '';
             lastLogCount = 0;
-            // Reset all agents
-            ['ceo','trend','writer','seo','image','editor','social','marketing'].forEach(id => {
-                setStatus(id, 'standby', 'Standby', 'Waiting...');
-            });
-            const response = await fetch('/run', {method: 'POST'});
+            ['ceo','trend','writer','seo','image','editor','social','marketing'].forEach(id => { setStatus(id, 'standby', 'Standby', 'Waiting...'); });
+            await fetch('/run', {method: 'POST'});
             if (pollInterval) clearInterval(pollInterval);
             pollInterval = setInterval(pollStatus, 1500);
         }
-
         async function pollStatus() {
             try {
                 const res = await fetch('/status');
@@ -423,4 +397,71 @@ DASHBOARD = '''
                     else if (log.status === 'error') setStatus(agentId, 'error', 'Error', log.message);
                 }
                 lastLogCount = logs.length;
-         
+                if (data.status === 'completed') {
+                    clearInterval(pollInterval);
+                    document.getElementById('runBtn').disabled = false;
+                    document.getElementById('runBtn').innerText = '▶ Run Again';
+                    document.getElementById('mainStatusText').innerText = 'Completed';
+                    document.getElementById('mainStatusDot').className = 'status-dot status-done';
+                    displayResults(data.results);
+                } else if (data.status === 'error') {
+                    clearInterval(pollInterval);
+                    document.getElementById('runBtn').disabled = false;
+                    document.getElementById('runBtn').innerText = '▶ Retry';
+                    document.getElementById('mainStatusText').innerText = 'Error';
+                    document.getElementById('mainStatusDot').className = 'status-dot status-error';
+                }
+            } catch(e) { console.error(e); }
+        }
+        function displayResults(r) {
+            const container = document.getElementById('results');
+            container.classList.remove('hidden');
+            let html = '<h2 class="text-xl font-bold mb-4">📊 Generated Content</h2>';
+            if (r.post) {
+                html += `<div class="mb-6"><h3 class="text-lg font-semibold">📝 Blog Post</h3><div class="mt-2">${r.image ? `<img src="${r.image}" class="rounded-xl w-full max-h-64 object-cover mb-3" onerror="this.style.display='none'"/>` : ''}<h4 class="text-xl font-bold mb-2">${r.post.title}</h4><p class="text-gray-300">${r.post.excerpt}</p><div class="prose prose-invert mt-3">${(r.post.content || '').substring(0,500)}...</div></div></div>`;
+            }
+            if (r.seo) {
+                html += `<div class="mb-6"><h3 class="text-lg font-semibold">🎯 SEO Metadata</h3><div class="bg-black/30 p-4 rounded-xl mt-2"><p><span class="text-gray-400">Meta Title:</span> ${r.seo.meta_title}</p><p class="mt-1"><span class="text-gray-400">Meta Description:</span> ${r.seo.meta_description}</p><div class="mt-2"><span class="text-gray-400">Keywords:</span> ${(r.seo.keywords || []).map(k => `<span class="tag">${k}</span>`).join('')}</div><div><span class="text-gray-400">Tags:</span> ${(r.seo.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}</div></div></div>`;
+            }
+            if (r.captions) {
+                html += `<div class="mb-6"><h3 class="text-lg font-semibold">📱 Social Media</h3><div class="grid gap-3 mt-2"><div class="bg-gradient-to-r from-purple-900/30 to-pink-900/30 p-3 rounded-xl"><span class="font-medium">Instagram:</span> ${r.captions.instagram}</div><div class="bg-black/30 p-3 rounded-xl"><span class="font-medium">Twitter:</span> ${r.captions.twitter}</div><div class="bg-blue-900/30 p-3 rounded-xl"><span class="font-medium">LinkedIn:</span> ${r.captions.linkedin}</div></div></div>`;
+            }
+            if (r.marketing) {
+                html += `<div class="mb-6"><h3 class="text-lg font-semibold">📢 Marketing Tips</h3><div class="bg-black/30 p-4 rounded-xl mt-2 whitespace-pre-wrap">${r.marketing}</div></div>`;
+            }
+            if (r.published) {
+                const pub = r.published;
+                const statusClass = pub.status === 'published' ? 'text-green-400' : pub.status === 'skipped' ? 'text-yellow-400' : 'text-red-400';
+                html += `<div class="mb-6"><h3 class="text-lg font-semibold">🚀 Blogger Status</h3><div class="bg-black/30 p-4 rounded-xl mt-2 ${statusClass}">${pub.status === 'published' ? `✅ Published: <a href="${pub.url}" target="_blank" class="underline">${pub.url}</a>` : `⚠️ ${pub.message}`}</div></div>`;
+            }
+            container.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
+'''  # <--- TRIPLE QUOTES CLOSED HERE
+
+@app.route("/")
+def dashboard():
+    return render_template_string(DASHBOARD)
+
+@app.route("/run", methods=["POST"])
+def run():
+    if company_state["running"]:
+        return jsonify({"error": "Already running"}), 400
+    threading.Thread(target=run_company, daemon=True).start()
+    return jsonify({"status": "started"})
+
+@app.route("/status")
+def status():
+    return jsonify({
+        "running": company_state["running"],
+        "logs": company_state["logs"][-100:],
+        "results": company_state["results"],
+        "status": company_state["status"]
+    })
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
