@@ -9,7 +9,7 @@ app = Flask(__name__)
 # =============================
 # APNI KEYS YAHAN DAALO
 # =============================
-DEEPSEEK_API_KEY = "sk-60389d1e6ba446d7920dd011947db7f5"
+DEEPSEEK_API_KEY = "sk-f6e8c3e32dba495eb2e5d7137f75ec4a"
 BLOGGER_API_KEY = "AIzaSyBFUbx6q98fZhUQZTntDh7YnufDnMa8p18"
 BLOGGER_TOKEN = "ya29.a0AQvPyIMyxEAhoDILH7vWCY-yR-JyiqJLAomGVKlwDmTu4KsfmR-LzQFM3Q5XdkEogTKiGaYn1-sY3CLKvdr3ehTzBXzUN6idHO45CerpIDXXTdU5dYVAdo2kDaM4UCWBale_VN8NKViXjD"
 BLOG_ID = "21948522432663252"
@@ -22,7 +22,7 @@ def log(agent, message, status="working"):
 
 def call_deepseek(system_prompt, user_message, max_tokens=2000):
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-    body = {"model": "deepseek-chat", "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}], "max_tokens": max_tokens, "temperature": 0.7}
+    body = {"model": "deepseek-v4-flash", "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}], "max_tokens": max_tokens, "temperature": 0.7}
     try:
         resp = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=body, timeout=60)
         data = resp.json()
