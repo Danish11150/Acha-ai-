@@ -1,3 +1,6 @@
+from gevent import monkey
+monkey.patch_all()
+
 import os, json, requests, threading, urllib.parse
 from flask import Flask, render_template_string, jsonify, request
 
